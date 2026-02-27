@@ -43,16 +43,16 @@ clap-verbosity-flag = { workspace = true, optional = true }
 env_logger = { workspace = true, optional = true }
 log-reload = { version = "0.1", optional = true }
 
+# Linux-only optional dependency used by the tauri window helper
+[target.'cfg(not(any(target_os="macos", target_os="windows")))'.dependencies]
+gtk = { version = "0.18", optional = true }
+
 # Dependencies for macOS and Windows only
 [target.'cfg(any(target_os="macos", target_os="windows"))'.dependencies]
 os_info = { version = "3", default-features = false }
 
-# Dependencies for Linux and other OSes only
-[target.'cfg(not(any(target_os="macos", target_os="windows")))'.dependencies]
-gtk = "0.18"
-
 [features]
-tauri = ["dep:tauri"]
+tauri = ["dep:tauri", "dep:gtk"]
 clap = ["dep:clap", "dep:clap-verbosity-flag"]
 webview-auth = []
 logger = ["dep:env_logger", "dep:log-reload"]

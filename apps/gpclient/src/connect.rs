@@ -61,7 +61,7 @@ pub(crate) struct ConnectArgs {
   #[arg(
     short,
     long,
-    help = "Use SSL client certificate file in pkcs#8 (.pem) or pkcs#12 (.p12, .pfx) format"
+    help = "Use SSL client certificate file in pkcs#8 (.pem) or pkcs#12 (.p12, .pfx) format, or a PKCS#11 URI (pkcs11:...)"
   )]
   certificate: Option<String>,
 

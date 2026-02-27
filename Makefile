@@ -97,6 +97,11 @@ build-fe:
 		exit 1; \
 	fi
 
+
+smoke-gpclient:
+	$(CARGO) build $(CARGO_BUILD_ARGS) -p gpclient
+	./target/release/gpclient --version
+
 build-rs:
 	if [ $(OFFLINE) -eq 1 ]; then \
 		tar -xJf vendor.tar.xz; \

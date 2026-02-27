@@ -82,6 +82,24 @@ gpauth <portal> --browser 2>/dev/null | sudo gpclient connect <portal> --cookie-
 - Use `--browser <browser>` to specify a browser (e.g., `firefox`, `chrome`)
 - Use `--browser remote` for headless servers – this provides a URL you can access from another machine to complete authentication
 
+#### CAC / PKCS#11 certificate usage
+
+`gpclient connect --certificate` accepts both certificate file paths and PKCS#11 URIs.
+
+```bash
+gpclient connect --certificate 'pkcs11:object=Certificate for PIV Authentication;type=cert;id=%01' --browser firefox <portal>
+```
+
+To discover the correct object URI, you can use OpenSC via `p11tool`:
+
+```bash
+p11tool --list-all --provider /usr/lib/x86_64-linux-gnu/opensc-pkcs11.so
+```
+
+> [!Tip]
+>
+> PKCS#11 object names and IDs vary by token, so copy the URI from your local `p11tool` output.
+
 ### Graphical User Interface
 
 The GUI application provides an intuitive interface for managing VPN connections. Launch it from your application menu or via the terminal:
@@ -346,7 +364,7 @@ This project includes a DevContainer configuration that provides a consistent, r
 Verify the CLI client is working correctly:
 
 ```bash
-./target/release/gpclient --help
+make smoke-gpclient
 ```
 
 ### Build Options

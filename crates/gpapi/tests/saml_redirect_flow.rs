@@ -12,7 +12,7 @@ use axum::{
   routing::post,
 };
 use gpapi::{
-  credential::{Credential, PreloginCredential},
+  credential::{AuthCookieCredential, Credential, PreloginCredential},
   gateway::{GatewayLogin, gateway_login},
   gp_params::GpParams,
   portal::{Prelogin, prelogin, retrieve_config},
@@ -108,6 +108,34 @@ async fn saml_redirect_flow_uses_expected_endpoints_and_cookies() -> anyhow::Res
   Ok(())
 }
 
+#[tokio::test]
+async fn getconfig_rejects_until_hip_cookie_state_is_present() -> anyhow::Result<()> {
+  let server_url = start_hip_policy_server().await?;
+  let gp_params = GpParams::builder().user_agent("gpapi-test/1.0").build();
+
+  let no_hip_cookie = Credential::AuthCookie(AuthCookieCredential::new(
+    "alice",
+    "no-hip-cookie",
+    "prelogon-cookie",
+  ));
+  let err = retrieve_config(&server_url, &no_hip_cookie, &gp_params)
+    .await
+    .expect_err("expected getconfig to fail when HIP policy is not satisfied");
+  let err_text = err.to_string();
+  assert!(err_text.contains("Portal config error"));
+  assert!(err_text.contains("HIP_REQUIRED"));
+
+  let hip_ok_cookie = Credential::AuthCookie(AuthCookieCredential::new(
+    "alice",
+    "hip-ok-cookie",
+    "prelogon-cookie",
+  ));
+  let portal_config = retrieve_config(&server_url, &hip_ok_cookie, &gp_params).await?;
+  assert_eq!(portal_config.auth_cookie().user_auth_cookie(), "xxxxxx");
+
+  Ok(())
+}
+
 async fn start_mock_server(state: MockState) -> anyhow::Result<String> {
   let app = Router::new()
     .route("/global-protect/prelogin.esp", post(handle_prelogin))
@@ -120,6 +148,20 @@ async fn start_mock_server(state: MockState) -> anyhow::Result<String> {
   tokio::spawn(async move {
     if let Err(err) = axum::serve(listener, app).await {
       eprintln!("mock gpapi server failed: {err}");
+    }
+  });
+
+  Ok(format!("http://{}", addr))
+}
+
+async fn start_hip_policy_server() -> anyhow::Result<String> {
+  let app = Router::new().route("/global-protect/getconfig.esp", post(handle_hip_policy_getconfig));
+
+  let listener = TcpListener::bind("127.0.0.1:0").await?;
+  let addr: SocketAddr = listener.local_addr()?;
+  tokio::spawn(async move {
+    if let Err(err) = axum::serve(listener, app).await {
+      eprintln!("mock hip policy server failed: {err}");
     }
   });
 
@@ -148,6 +190,26 @@ async fn handle_gateway_login(
 ) -> impl IntoResponse {
   state.push("gateway-login", &params);
   GATEWAY_LOGIN_XML
+}
+
+async fn handle_hip_policy_getconfig(Form(params): Form<HashMap<String, String>>) -> impl IntoResponse {
+  let cookie = params.get("portal-userauthcookie").map(String::as_str).unwrap_or_default();
+
+  if cookie != "hip-ok-cookie" {
+    return (
+      axum::http::StatusCode::FORBIDDEN,
+      [("x-private-pan-globalprotect", "HIP_REQUIRED")],
+      "HIP report is required by policy",
+    )
+      .into_response();
+  }
+
+  (
+    axum::http::StatusCode::OK,
+    [("content-type", "application/xml")],
+    PORTAL_CONFIG_XML,
+  )
+    .into_response()
 }
 
 #[test]

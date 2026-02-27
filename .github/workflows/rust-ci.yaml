@@ -1,0 +1,41 @@
+name: Rust CI
+
+on:
+  push:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - ".github/workflows/rust-ci.yaml"
+  pull_request:
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/**"
+      - ".github/workflows/rust-ci.yaml"
+  workflow_dispatch:
+
+jobs:
+  gpapi-tests:
+    name: gpapi tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.1
+
+      - name: Build gpapi
+        run: cargo test -p gpapi --no-run
+
+      - name: Run gpapi tests
+        run: cargo test -p gpapi

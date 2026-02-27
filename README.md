@@ -100,6 +100,38 @@ p11tool --list-all --provider /usr/lib/x86_64-linux-gnu/opensc-pkcs11.so
 >
 > PKCS#11 object names and IDs vary by token, so copy the URI from your local `p11tool` output.
 
+#### SAML Redirect Authentication Flow
+
+When a portal requires `saml-auth-method=REDIRECT`, `gpclient connect --browser ...` performs this sequence:
+
+1. Portal prelogin
+2. Browser SSO (local browser or `--browser remote` for headless servers)
+3. SAML callback processing
+4. Portal cookie exchange
+5. Gateway login and tunnel connection
+
+For headless hosts:
+
+```bash
+gpclient connect --browser remote <portal>
+```
+
+The CLI prints a URL to open on another machine. After login completes, the callback data is consumed and connection continues automatically.
+
+#### HIP (Host Information Profile) Reporting
+
+Use `--hip` when your policy requires HIP before full tunnel establishment:
+
+```bash
+gpclient connect --hip --browser firefox <portal>
+```
+
+You can also override wrapper/user explicitly (same behavior as OpenConnect options):
+
+```bash
+gpclient connect --hip --csd-wrapper /usr/libexec/gpclient/hipreport.sh --csd-user "$USER" <portal>
+```
+
 ### Graphical User Interface
 
 The GUI application provides an intuitive interface for managing VPN connections. Launch it from your application menu or via the terminal:
@@ -336,6 +368,9 @@ This project includes a DevContainer configuration that provides a consistent, r
 - [Rust 1.85 or later](https://www.rust-lang.org/tools/install)
 - [Tauri dependencies](https://tauri.app/start/prerequisites/)
 - `libopenconnect-dev` (or `openconnect-devel` on RPM-based systems)
+- `openssl` development headers (e.g., `libssl-dev` on Debian/Ubuntu)
+- `opensc` and `p11-kit` for CAC/PKCS#11 environments
+- `vpnc-script` for VPN script integration
 - `pkexec` and `gnome-keyring` (or `pam_kwallet` on KDE)
 - `nodejs` and `pnpm` (optional if using pre-built release tarballs with `BUILD_FE=0`)
 
@@ -392,6 +427,42 @@ sudo -E gpclient connect <portal>
 ```
 
 See related issue: [#316](https://github.com/yuezk/GlobalProtect-openconnect/issues/316)
+
+### Q: Why do I see "Failed to parse XML server response" after SAML?
+
+This usually means SAML redirect completed in the browser, but the callback/cookie exchange did not finish correctly.
+
+Try:
+
+```bash
+gpclient --verbose connect --browser remote <portal>
+```
+
+Confirm logs show this order: prelogin -> SAML browser flow -> SAML completed -> portal config.
+
+### Q: Why do I see "errors getting SSL/VPN config" or a non-XML getconfig response?
+
+This typically indicates authentication or policy denial at the gateway stage (for example: missing/expired auth cookie, required HIP not provided, or OS policy mismatch).
+
+Try:
+
+1. Run with `--verbose` and verify gateway login succeeded before tunnel setup.
+2. Retry with HIP enabled: `gpclient connect --hip ...`.
+3. Check `--os` / `--os-version` values if your portal enforces specific client profiles.
+
+### Q: CAC certificate object not found or wrong PKCS#11 URI?
+
+List token objects and copy the certificate URI directly:
+
+```bash
+p11tool --list-all --provider /usr/lib/x86_64-linux-gnu/opensc-pkcs11.so
+```
+
+Then pass the exact URI to:
+
+```bash
+gpclient connect --certificate 'pkcs11:...;type=cert' <portal>
+```
 
 ## Licensing
 

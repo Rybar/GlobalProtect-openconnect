@@ -56,3 +56,7 @@ tauri = ["dep:tauri", "dep:gtk"]
 clap = ["dep:clap", "dep:clap-verbosity-flag"]
 webview-auth = []
 logger = ["dep:env_logger", "dep:log-reload"]
+
+[dev-dependencies]
+axum.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }

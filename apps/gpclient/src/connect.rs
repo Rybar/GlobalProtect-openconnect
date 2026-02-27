@@ -262,12 +262,19 @@ impl<'a> ConnectHandler<'a> {
   }
 
   async fn connect_portal_with_prelogin(&self, portal: &str) -> anyhow::Result<()> {
+    info!("Portal prelogin started for {}", portal);
     let gp_params = self.build_gp_params();
 
     let prelogin = prelogin(portal, &gp_params).await?;
+    info!("Portal prelogin completed");
 
     let cred = self.obtain_credential(&prelogin, portal).await?;
+    info!("Authentication credential obtained from prelogin flow");
     let mut portal_config = retrieve_config(portal, &cred, &gp_params).await?;
+    info!(
+      "Portal config retrieved successfully; {} gateway candidate(s)",
+      portal_config.gateways().len()
+    );
 
     let selected_gateway = match &self.args.gateway {
       Some(gateway) => portal_config
@@ -292,6 +299,7 @@ impl<'a> ConnectHandler<'a> {
 
     let gateway = selected_gateway.server();
     let cred = portal_config.auth_cookie().into();
+    info!("Gateway login started for {}", gateway);
 
     let cookie = match self.login_gateway(gateway, &cred, &gp_params).await {
       Ok(cookie) => cookie,
@@ -300,6 +308,7 @@ impl<'a> ConnectHandler<'a> {
         return self.connect_gateway_with_prelogin(gateway).await;
       }
     };
+    info!("Gateway login completed; received gateway cookie");
 
     // Use the client version from the command line argument if specified, otherwise
     // use the version from the portal config if available
@@ -315,9 +324,13 @@ impl<'a> ConnectHandler<'a> {
     gp_params.set_is_gateway(true);
 
     let prelogin = prelogin(gateway, &gp_params).await?;
+    info!("Gateway prelogin completed");
     let cred = self.obtain_credential(&prelogin, gateway).await?;
+    info!("Authentication credential obtained from gateway prelogin");
 
+    info!("Gateway login started for {}", gateway);
     let cookie = self.login_gateway(gateway, &cred, &gp_params).await?;
+    info!("Gateway login completed; received gateway cookie");
 
     // When logging in to a gateway directly, there is no portal config to get the client version from
     let client_version = self.args.client_version.as_deref();
@@ -352,6 +365,11 @@ impl<'a> ConnectHandler<'a> {
     } else {
       (false, None)
     };
+    info!(
+      "Preparing tunnel connection: hip={}, csd_wrapper={}",
+      hip,
+      csd_wrapper.as_deref().unwrap_or("<default>")
+    );
 
     let os = ClientOs::from(&self.args.os).to_openconnect_os().to_owned();
     let os_version = self.args.os_version().to_owned();
@@ -406,6 +424,7 @@ impl<'a> ConnectHandler<'a> {
 
     match prelogin {
       Prelogin::Saml(prelogin) => {
+        info!("SAML REDIRECT authentication is required; preparing browser authentication flow");
         let browser = if prelogin.support_default_browser() {
           self.args.browser.as_deref()
         } else if !cfg!(feature = "webview-auth") {
@@ -439,6 +458,7 @@ impl<'a> ConnectHandler<'a> {
           .default_browser(use_default_browser);
 
         let cred = auth_launcher.launch().await?;
+        info!("SAML authentication completed");
         Ok(cred)
       }
 

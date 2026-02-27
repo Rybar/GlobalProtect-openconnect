@@ -1,5 +1,6 @@
 use crate::Vpn;
 use log::{debug, info, trace, warn};
+use std::borrow::Cow;
 use std::ffi::{c_char, c_int, c_void};
 
 /// ConnectOptions struct for FFI, the field names and order must match the C definition.
@@ -67,7 +68,7 @@ extern "C" fn vpn_log(level: i32, message: *const c_char) {
   let message = unsafe { std::ffi::CStr::from_ptr(message) };
   let message = message.to_str().unwrap_or("Invalid log message");
   // Strip the trailing newline
-  let message = message.trim_end_matches('\n');
+  let message = redact_pkcs11_pin(message.trim_end_matches('\n'));
 
   if level == 0 {
     warn!("{}", message);
@@ -84,4 +85,24 @@ extern "C" fn vpn_log(level: i32, message: *const c_char) {
     );
     debug!("{}", message);
   }
+}
+
+fn redact_pkcs11_pin(message: &str) -> Cow<'_, str> {
+  let marker = "pin-value=";
+  let Some(start) = message.find(marker) else {
+    return Cow::Borrowed(message);
+  };
+
+  let value_start = start + marker.len();
+  let tail = &message[value_start..];
+  let value_end_rel = tail
+    .find(|ch: char| ch == '&' || ch == ';' || ch == ' ' || ch == '\'' || ch == '"' || ch == ')')
+    .unwrap_or(tail.len());
+
+  let value_end = value_start + value_end_rel;
+  let mut redacted = String::with_capacity(message.len());
+  redacted.push_str(&message[..value_start]);
+  redacted.push_str("<redacted>");
+  redacted.push_str(&message[value_end..]);
+  Cow::Owned(redacted)
 }

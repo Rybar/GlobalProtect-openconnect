@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+#[cfg(unix)]
+use std::{fs::OpenOptions, io::Write, os::unix::fs::OpenOptionsExt};
 
 use common::constants::GP_SERVICE_LOCK_FILE;
 use thiserror::Error;
@@ -20,7 +22,25 @@ impl LockFile {
 
   pub fn lock(&self, content: &str) -> anyhow::Result<()> {
     let content = format!("{}:{}", self.pid, content);
-    std::fs::write(&self.path, content)?;
+    #[cfg(unix)]
+    {
+      // Ensure non-root helper processes can read service lock metadata.
+      let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .mode(0o644)
+        .open(&self.path)?;
+      file.write_all(content.as_bytes())?;
+      file.flush()?;
+      // Explicitly set mode after creation because umask can still narrow
+      // the permissions requested via OpenOptions::mode().
+      std::fs::set_permissions(&self.path, std::os::unix::fs::PermissionsExt::from_mode(0o644))?;
+    }
+    #[cfg(not(unix))]
+    {
+      std::fs::write(&self.path, content)?;
+    }
     Ok(())
   }
 

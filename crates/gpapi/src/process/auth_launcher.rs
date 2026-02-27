@@ -2,6 +2,8 @@ use std::process::Stdio;
 
 use anyhow::bail;
 use common::constants::GP_AUTH_BINARY;
+#[cfg(feature = "webview-auth")]
+use log::warn;
 use tokio::process::Command;
 
 use crate::{auth::SamlAuthResult, credential::Credential};
@@ -119,8 +121,10 @@ impl<'a> SamlAuthLauncher<'a> {
     self
   }
 
-  /// Launch the authenticator binary as the current user or SUDO_USER if available.
-  pub async fn launch(self) -> anyhow::Result<Credential> {
+  async fn run_auth_cmd(
+    &self,
+    #[cfg(feature = "webview-auth")] include_webview_flags: bool,
+  ) -> anyhow::Result<std::process::Output> {
     let program = self.auth_executable.unwrap_or(GP_AUTH_BINARY);
     let mut auth_cmd = Command::new(program);
     auth_cmd.arg(self.server);
@@ -154,7 +158,7 @@ impl<'a> SamlAuthLauncher<'a> {
     }
 
     #[cfg(feature = "webview-auth")]
-    {
+    if include_webview_flags {
       if self.hidpi {
         auth_cmd.arg("--hidpi");
       }
@@ -180,12 +184,41 @@ impl<'a> SamlAuthLauncher<'a> {
     let output = non_root_cmd
       .kill_on_drop(true)
       .stdout(Stdio::piped())
+      .stderr(Stdio::piped())
       .spawn()?
       .wait_with_output()
       .await?;
 
+    Ok(output)
+  }
+
+  /// Launch the authenticator binary as the current user or SUDO_USER if available.
+  pub async fn launch(self) -> anyhow::Result<Credential> {
+    #[cfg(feature = "webview-auth")]
+    let mut output = self.run_auth_cmd(true).await?;
+    #[cfg(not(feature = "webview-auth"))]
+    let output = self.run_auth_cmd().await?;
+
+    #[cfg(feature = "webview-auth")]
+    {
+      let stderr = String::from_utf8_lossy(&output.stderr);
+      if !output.status.success()
+        && (stderr.contains("unexpected argument '--clean'")
+          || stderr.contains("unexpected argument '--hidpi'")
+          || stderr.contains("unexpected argument '--default-browser'"))
+      {
+        warn!("gpauth rejected webview flags; retrying auth command without them");
+        output = self.run_auth_cmd(false).await?;
+      }
+    }
+
     let Ok(auth_result) = serde_json::from_slice::<SamlAuthResult>(&output.stdout) else {
-      bail!("Failed to parse auth data")
+      let stderr = String::from_utf8_lossy(&output.stderr);
+      if stderr.trim().is_empty() {
+        bail!("Failed to parse auth data")
+      } else {
+        bail!("Failed to parse auth data: {}", stderr.trim())
+      }
     };
 
     Credential::try_from(auth_result)

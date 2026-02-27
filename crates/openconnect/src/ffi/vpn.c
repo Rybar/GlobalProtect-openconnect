@@ -35,7 +35,7 @@ static void print_progress(__attribute__((unused)) void *_vpninfo, int level,
 	if (message == NULL) {
 		ERROR("Failed to format log message");
 	} else {
-		LOG(level, message);
+		vpn_log(level, message);
 		free(message);
 	}
 }
@@ -109,14 +109,14 @@ int vpn_connect(const vpn_options *options, vpn_connected_callback callback)
 					       options->client_version);
 	}
 
+	if (options->key_password) {
+		openconnect_set_key_password(vpninfo, options->key_password);
+	}
+
 	if (options->certificate) {
 		INFO("Setting client certificate: %s", options->certificate);
 		openconnect_set_client_cert(vpninfo, options->certificate,
 					    options->sslkey);
-	}
-
-	if (options->key_password) {
-		openconnect_set_key_password(vpninfo, options->key_password);
 	}
 
 	if (options->csd_wrapper) {

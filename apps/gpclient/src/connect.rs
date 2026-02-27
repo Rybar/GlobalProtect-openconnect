@@ -245,10 +245,12 @@ impl<'a> ConnectHandler<'a> {
       return Ok(());
     }
 
-    let pin = Password::new("Enter SmartCard PIN:")
-      .without_confirmation()
-      .with_display_mode(PasswordDisplayMode::Masked)
-      .prompt()?;
+    info!("PKCS#11 certificate detected; requesting SmartCard PIN");
+    let pin = prompt_secret("Enter SmartCard PIN:")?;
+    let pin = pin.trim().to_owned();
+    if pin.is_empty() {
+      bail!("SmartCard PIN cannot be empty");
+    }
 
     self.latest_key_password.replace(Some(pin));
     Ok(())
@@ -525,6 +527,23 @@ impl<'a> ConnectHandler<'a> {
     };
 
     Ok(password)
+  }
+}
+
+fn prompt_secret(prompt: &str) -> anyhow::Result<String> {
+  match Password::new(prompt)
+    .without_confirmation()
+    .with_display_mode(PasswordDisplayMode::Masked)
+    .prompt()
+  {
+    Ok(secret) => Ok(secret),
+    Err(err) => {
+      warn!(
+        "Interactive masked prompt failed ({}), falling back to terminal prompt",
+        err
+      );
+      rpassword::prompt_password(prompt).map_err(|e| anyhow::anyhow!(e))
+    }
   }
 }
 

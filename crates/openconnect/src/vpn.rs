@@ -5,6 +5,7 @@ use std::{
 };
 
 use log::info;
+use urlencoding::encode;
 
 use crate::ffi;
 use crate::vpn_utils::{check_executable, find_csd_wrapper, find_vpnc_script};
@@ -306,6 +307,11 @@ impl VpnBuilder {
     let user_agent = self.user_agent.unwrap_or_default();
     let os = self.os.unwrap_or("linux".to_string());
 
+    let certificate = self.certificate.clone().filter(|v| !v.trim().is_empty());
+    let key_password = self.key_password.clone().filter(|v| !v.trim().is_empty());
+    let sslkey = self.sslkey.clone().filter(|v| !v.trim().is_empty());
+    let sslkey = sslkey.or_else(|| build_pkcs11_sslkey_with_pin(certificate.as_deref(), key_password.as_deref()));
+
     Ok(Vpn {
       server: Self::to_cstring(&self.server),
       cookie: Self::to_cstring(&self.cookie),
@@ -319,9 +325,9 @@ impl VpnBuilder {
       interface: self.interface.as_deref().map(Self::to_cstring),
       script_tun: self.script_tun,
 
-      certificate: self.certificate.as_deref().map(Self::to_cstring),
-      sslkey: self.sslkey.as_deref().map(Self::to_cstring),
-      key_password: self.key_password.as_deref().map(Self::to_cstring),
+      certificate: certificate.as_deref().map(Self::to_cstring),
+      sslkey: sslkey.as_deref().map(Self::to_cstring),
+      key_password: key_password.as_deref().map(Self::to_cstring),
       servercert: None,
 
       csd_uid: self.csd_uid,
@@ -339,5 +345,65 @@ impl VpnBuilder {
 
   fn to_cstring(value: &str) -> CString {
     CString::new(value.to_string()).expect("Failed to convert to CString")
+  }
+}
+
+fn build_pkcs11_sslkey_with_pin(certificate: Option<&str>, pin: Option<&str>) -> Option<String> {
+  let cert = certificate?;
+  let pin = pin?;
+  if !cert.trim_start().to_ascii_lowercase().starts_with("pkcs11:") {
+    return None;
+  }
+
+  let cert_key = if cert.contains(";type=cert") {
+    cert.replacen(";type=cert", ";type=private", 1)
+  } else if cert.contains(";type=public") {
+    cert.replacen(";type=public", ";type=private", 1)
+  } else if cert.contains(";type=") {
+    cert.to_string()
+  } else {
+    format!("{cert};type=private")
+  };
+
+  if cert_key.contains("pin-value=") {
+    return Some(cert_key);
+  }
+
+  let joiner = if cert_key.contains('?') { '&' } else { '?' };
+  Some(format!("{cert_key}{joiner}pin-value={}", encode(pin)))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::build_pkcs11_sslkey_with_pin;
+  use super::Vpn;
+
+  #[test]
+  fn pkcs11_sslkey_uri_is_generated_from_cert_uri() {
+    let uri = build_pkcs11_sslkey_with_pin(Some("pkcs11:token=TOKEN;id=%01;type=cert"), Some("123456")).unwrap();
+    assert_eq!(uri, "pkcs11:token=TOKEN;id=%01;type=private?pin-value=123456");
+  }
+
+  #[test]
+  fn pkcs11_sslkey_uri_is_not_generated_without_pin() {
+    let uri = build_pkcs11_sslkey_with_pin(Some("pkcs11:token=TOKEN;id=%01;type=cert"), None);
+    assert!(uri.is_none());
+  }
+
+  #[test]
+  fn builder_generates_pkcs11_sslkey_from_pin() {
+    let vpn = Vpn::builder("vpn.example.com", "cookie")
+      .script("/bin/true".to_string())
+      .certificate(Some("pkcs11:token=TOKEN;id=%01;type=cert".to_string()))
+      .key_password(Some("123456".to_string()))
+      .build()
+      .expect("vpn should build");
+
+    let sslkey = vpn
+      .sslkey
+      .as_ref()
+      .and_then(|v| v.to_str().ok())
+      .expect("sslkey should be generated");
+    assert_eq!(sslkey, "pkcs11:token=TOKEN;id=%01;type=private?pin-value=123456");
   }
 }

@@ -166,7 +166,10 @@ pub async fn retrieve_config(portal: &str, cred: &Credential, gp_params: &GpPara
     gateways.push(Gateway::new(server.to_string(), server.to_string()));
   }
 
-  let version = root.descendant_text("version").map(|s| s.to_string());
+  let version = root
+    .descendant_text("version")
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty());
   info!("Detected portal version: {:?}", version);
 
   Ok(PortalConfig {

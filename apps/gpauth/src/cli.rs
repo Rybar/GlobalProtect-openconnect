@@ -56,7 +56,6 @@ struct Cli {
   #[arg(long, help = "Ignore TLS errors")]
   ignore_tls_errors: bool,
 
-  #[cfg(feature = "webview-auth")]
   #[arg(long, help = "Use the default browser for authentication")]
   default_browser: bool,
 
@@ -68,12 +67,10 @@ struct Cli {
   )]
   browser: Option<String>,
 
-  #[cfg(feature = "webview-auth")]
-  #[arg(long, help = "The HiDPI mode, useful for high-resolution screens")]
+  #[arg(long, help = "The HiDPI mode, useful for high-resolution screens (no-op without webview-auth)")]
   hidpi: bool,
 
-  #[cfg(feature = "webview-auth")]
-  #[arg(long, help = "Clean the cache of the embedded browser")]
+  #[arg(long, help = "Clean the cache of the embedded browser (no-op without webview-auth)")]
   pub clean: bool,
 
   #[command(flatten)]
@@ -120,14 +117,11 @@ impl Cli {
       None => auth_prelogin(&server, &gp_params).await?,
     };
 
-    #[cfg(feature = "webview-auth")]
     let browser = self
       .browser
       .as_deref()
-      .or_else(|| self.default_browser.then(|| "default"));
-
-    #[cfg(not(feature = "webview-auth"))]
-    let browser = self.browser.as_deref().or(Some("default"));
+      .or_else(|| self.default_browser.then_some("default"))
+      .or(Some("default"));
 
     if let Some(browser) = browser {
       let authenticator = BrowserAuthenticator::new(&auth_request, browser);

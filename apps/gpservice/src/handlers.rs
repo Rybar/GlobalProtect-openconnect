@@ -3,7 +3,7 @@ use std::{
   io::BufReader,
   ops::ControlFlow,
   os::unix::fs::PermissionsExt,
-  path::PathBuf,
+  path::{Path, PathBuf},
   sync::Arc,
 };
 
@@ -73,6 +73,8 @@ async fn install_gui(src: &str) -> anyhow::Result<()> {
   };
 
   fs::create_dir_all(dir).await?;
+  #[cfg(unix)]
+  ensure_gui_dir_permissions(dir)?;
 
   // Unpack the archive
   info!("Unpacking GUI archive");
@@ -96,6 +98,31 @@ async fn install_gui(src: &str) -> anyhow::Result<()> {
 
   // Make the binary executable
   fs::set_permissions(GP_GUI_BINARY, Permissions::from_mode(0o755)).await?;
+
+  Ok(())
+}
+
+#[cfg(unix)]
+fn ensure_gui_dir_permissions(dir: &Path) -> anyhow::Result<()> {
+  // Make the GUI path traversable/executable for the non-root user that runs gpgui.
+  // We only touch the immediate directory chain where the GUI binary is installed.
+  let mut current = Some(dir);
+  for _ in 0..3 {
+    let Some(path) = current else {
+      break;
+    };
+
+    if let Ok(metadata) = std::fs::metadata(path) {
+      let mut perms = metadata.permissions();
+      let mode = perms.mode();
+      if mode != 0o755 {
+        perms.set_mode(0o755);
+        std::fs::set_permissions(path, perms)?;
+      }
+    }
+
+    current = path.parent();
+  }
 
   Ok(())
 }

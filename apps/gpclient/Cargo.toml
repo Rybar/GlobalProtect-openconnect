@@ -17,6 +17,7 @@ chrono.workspace = true
 clap.workspace = true
 env_logger.workspace = true
 inquire = "0.9"
+rpassword = "7"
 log.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 sysinfo.workspace = true

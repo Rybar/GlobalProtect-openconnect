@@ -14,6 +14,7 @@ use tokio::fs;
 use crate::{
   GP_CLIENT_LOCK_FILE,
   connect::{ConnectArgs, ConnectHandler},
+  diagnose::{DiagnoseArgs, DiagnoseHandler},
   disconnect::{DisconnectArgs, DisconnectHandler},
   hip::{HipArgs, HipHandler},
   launch_gui::{LaunchGuiArgs, LaunchGuiHandler},
@@ -37,6 +38,8 @@ enum CliCommand {
   LaunchGui(LaunchGuiArgs),
   #[command(about = "Generate HIP report")]
   Hip(HipArgs),
+  #[command(about = "Print local runtime diagnostics for SAML/CAC/HIP troubleshooting")]
+  Diagnose(DiagnoseArgs),
 }
 
 #[derive(Parser)]
@@ -136,6 +139,7 @@ impl Cli {
       CliCommand::Disconnect(args) => DisconnectHandler::new(args).handle().await,
       CliCommand::LaunchGui(args) => LaunchGuiHandler::new(args).handle().await,
       CliCommand::Hip(args) => HipHandler::new(args).handle().await,
+      CliCommand::Diagnose(args) => DiagnoseHandler::new(args).handle().await,
     }
   }
 }

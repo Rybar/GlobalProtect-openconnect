@@ -1,5 +1,6 @@
 mod cli;
 mod connect;
+mod diagnose;
 mod disconnect;
 mod hip;
 mod launch_gui;

@@ -132,6 +132,12 @@ You can also override wrapper/user explicitly (same behavior as OpenConnect opti
 gpclient connect --hip --csd-wrapper /usr/libexec/gpclient/hipreport.sh --csd-user "$USER" <portal>
 ```
 
+For environments with non-standard HIP wrapper locations, set:
+
+```bash
+export GPCLIENT_HIP_WRAPPER=/custom/path/hipreport.sh
+```
+
 ### Graphical User Interface
 
 The GUI application provides an intuitive interface for managing VPN connections. Launch it from your application menu or via the terminal:
@@ -439,6 +445,12 @@ gpclient --verbose connect --browser remote <portal>
 ```
 
 Confirm logs show this order: prelogin -> SAML browser flow -> SAML completed -> portal config.
+
+You can also print local runtime checks before connecting:
+
+```bash
+gpclient diagnose --certificate 'pkcs11:...;type=cert'
+```
 
 ### Q: Why do I see "errors getting SSL/VPN config" or a non-XML getconfig response?
 

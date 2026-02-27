@@ -1,5 +1,5 @@
 use std::{
-  ffi::{c_char, CString},
+  ffi::{CString, c_char},
   fmt,
   sync::{Arc, RwLock},
 };
@@ -283,7 +283,7 @@ impl VpnBuilder {
     }
   }
 
-  fn determine_csd_wrapper(&self) -> Result<Option<&str>, VpnError> {
+  fn determine_csd_wrapper(&self) -> Result<Option<String>, VpnError> {
     if !self.hip {
       return Ok(None);
     }
@@ -291,18 +291,17 @@ impl VpnBuilder {
     match &self.csd_wrapper {
       Some(csd_wrapper) if !csd_wrapper.is_empty() => {
         check_executable(csd_wrapper).map_err(|e| VpnError::new(e.to_string()))?;
-        Ok(Some(csd_wrapper))
+        Ok(Some(csd_wrapper.clone()))
       }
-      _ => {
-        let s = find_csd_wrapper().ok_or_else(|| VpnError::new(String::from("Failed to find csd wrapper")))?;
-        Ok(Some(s))
-      }
+      _ => find_csd_wrapper()
+        .map(Some)
+        .ok_or_else(|| VpnError::new(String::from("Failed to find csd wrapper"))),
     }
   }
 
   pub fn build(self) -> Result<Vpn, VpnError> {
     let script = self.determine_script()?.to_owned();
-    let csd_wrapper = self.determine_csd_wrapper()?.map(|s| s.to_owned());
+    let csd_wrapper = self.determine_csd_wrapper()?;
 
     let user_agent = self.user_agent.unwrap_or_default();
     let os = self.os.unwrap_or("linux".to_string());

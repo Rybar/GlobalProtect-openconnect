@@ -6,7 +6,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
-use crate::utils::request::create_identity;
+use crate::utils::request::{create_identity, is_pkcs11_uri};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Type, Default)]
 pub enum ClientOs {
@@ -256,8 +256,12 @@ impl TryFrom<&GpParams> for Client {
 
     if let Some(cert) = value.certificate.as_deref() {
       info!("Using client certificate authentication...");
-      let identity = create_identity(cert, value.sslkey.as_deref(), value.key_password.as_deref())?;
-      builder = builder.identity(identity);
+      if is_pkcs11_uri(cert) {
+        info!("Detected PKCS#11 certificate URI; skipping reqwest identity setup and deferring to OpenConnect");
+      } else {
+        let identity = create_identity(cert, value.sslkey.as_deref(), value.key_password.as_deref())?;
+        builder = builder.identity(identity);
+      }
     }
 
     let client = builder.build()?;

@@ -16,10 +16,18 @@ pub enum RequestIdentityError {
   DecryptError(&'static str),
 }
 
+pub fn is_pkcs11_uri(value: &str) -> bool {
+  value.trim_start().to_ascii_lowercase().starts_with("pkcs11:")
+}
+
 /// Create an identity object from a certificate and key
 /// The file is expected to be the PKCS#8 PEM or PKCS#12 format
 /// When using a PKCS#12 file, the key is NOT required, but a passphrase is required
 pub fn create_identity(cert: &str, key: Option<&str>, passphrase: Option<&str>) -> anyhow::Result<Identity> {
+  if is_pkcs11_uri(cert) {
+    bail!("PKCS#11 URIs are not supported for HTTP client identity");
+  }
+
   if cert.ends_with(".p12") || cert.ends_with(".pfx") {
     create_identity_from_pkcs12(cert, passphrase)
   } else {
@@ -136,5 +144,12 @@ mod tests {
     let identity = create_identity_from_pem(cert, Some(key), None);
 
     assert!(identity.is_ok());
+  }
+
+  #[test]
+  fn detects_pkcs11_uri() {
+    assert!(is_pkcs11_uri("pkcs11:object=Certificate;type=cert"));
+    assert!(is_pkcs11_uri("  PKCS11:object=Certificate;type=cert"));
+    assert!(!is_pkcs11_uri("/tmp/certificate.pem"));
   }
 }

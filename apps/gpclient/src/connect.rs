@@ -204,6 +204,7 @@ impl<'a> ConnectHandler<'a> {
     }
 
     self.latest_key_password.replace(self.args.key_password.clone());
+    self.prompt_pkcs11_pin_if_needed()?;
 
     loop {
       let Err(err) = self.handle_impl().await else {
@@ -232,6 +233,25 @@ impl<'a> ConnectHandler<'a> {
         }
       }
     }
+  }
+
+  fn prompt_pkcs11_pin_if_needed(&self) -> anyhow::Result<()> {
+    let Some(certificate) = self.args.certificate.as_deref() else {
+      return Ok(());
+    };
+
+    let is_pkcs11 = gpapi::utils::request::is_pkcs11_uri(certificate);
+    if !is_pkcs11 || self.latest_key_password.borrow().is_some() {
+      return Ok(());
+    }
+
+    let pin = Password::new("Enter SmartCard PIN:")
+      .without_confirmation()
+      .with_display_mode(PasswordDisplayMode::Masked)
+      .prompt()?;
+
+    self.latest_key_password.replace(Some(pin));
+    Ok(())
   }
 
   pub(crate) async fn handle_impl(&self) -> anyhow::Result<()> {

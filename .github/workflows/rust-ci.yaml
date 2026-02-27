@@ -6,18 +6,20 @@ on:
       - "Cargo.toml"
       - "Cargo.lock"
       - "crates/**"
+      - "apps/gpclient/**"
       - ".github/workflows/rust-ci.yaml"
   pull_request:
     paths:
       - "Cargo.toml"
       - "Cargo.lock"
       - "crates/**"
+      - "apps/gpclient/**"
       - ".github/workflows/rust-ci.yaml"
   workflow_dispatch:
 
 jobs:
-  gpapi-tests:
-    name: gpapi tests (${{ matrix.os }})
+  rust-tests:
+    name: rust tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -34,8 +36,27 @@ jobs:
         with:
           toolchain: 1.85.1
 
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            autoconf automake libtool pkg-config patch make gcc \
+            libssl-dev libxml2-dev zlib1g-dev liblz4-dev libgnutls28-dev \
+            libp11-kit-dev nettle-dev libgmp-dev
+
       - name: Build gpapi
         run: cargo test -p gpapi --no-run
 
       - name: Run gpapi tests
         run: cargo test -p gpapi
+
+      - name: Run openconnect tests
+        run: cargo test -p openconnect
+
+      - name: Check gpclient
+        run: cargo check -p gpclient
+
+      - name: gpclient diagnose smoke test
+        run: |
+          cargo run -q -p gpclient -- diagnose
+          cargo run -q -p gpclient -- diagnose --certificate 'pkcs11:object=Certificate;type=cert'

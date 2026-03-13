@@ -31,7 +31,7 @@ A modern GlobalProtect VPN client for Linux, built on OpenConnect with full supp
 
 - **Cross-Platform Linux Support** – Optimized for various Linux distributions
 - **Dual Interface** – Available as both CLI and GUI applications
-- **Flexible Authentication** – Supports SSO, non-SSO, FIDO2 (e.g., YubiKey), and client certificate authentication
+- **Flexible Authentication** – Supports SSO, non-SSO, FIDO2 (e.g., YubiKey), client certificate authentication, and SSO with CAC/PIV smartcards (PKCS#11)
 - **Browser Integration** – Authenticate using your default browser or any specified browser
 - **Multi-Portal Support** – Connect to multiple portals and gateways
 - **Direct Gateway Connection** – Bypass portal selection when needed
@@ -89,6 +89,19 @@ gpauth <portal> --browser 2>/dev/null | sudo gpclient connect <portal> --cookie-
 ```bash
 gpclient connect --certificate 'pkcs11:object=Certificate for PIV Authentication;type=cert;id=%01' --browser firefox <portal>
 ```
+
+For CAC/PIV SSO portals, use only the certificate URI and let `gpclient` prompt for the SmartCard PIN interactively:
+
+```bash
+gpclient connect --browser firefox \
+  --certificate 'pkcs11:module-path=/usr/lib/x86_64-linux-gnu/opensc-pkcs11.so;token=<TOKEN>;id=%01;type=cert' \
+  <portal>
+```
+
+> [!Important]
+>
+> Do not pass `--sslkey` for PKCS#11 CAC/PIV flows unless you explicitly need to override key selection.  
+> `gpclient` now derives the matching PKCS#11 private-key URI from `--certificate` and uses the prompted PIN for tunnel setup.
 
 To discover the correct object URI, you can use OpenSC via `p11tool`:
 
@@ -475,6 +488,16 @@ Then pass the exact URI to:
 ```bash
 gpclient connect --certificate 'pkcs11:...;type=cert' <portal>
 ```
+
+### Q: Why does CAC login fail with "Error in provided PIN" and no PIN prompt?
+
+For PKCS#11 smartcard auth:
+
+1. Pass the CAC certificate with `--certificate 'pkcs11:...;type=cert'`.
+2. Do not pass `--sslkey` unless required for a custom key object.
+3. Enter PIN when prompted by `gpclient`.
+
+If PIN works only when embedded in URI, verify that you are using a current `gpclient` build from this repository and rerun without `--sslkey`.
 
 ## Licensing
 
